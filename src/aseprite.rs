@@ -1,15 +1,18 @@
 use core::str;
-use std::{collections::HashMap, iter::FusedIterator};
+use std::{collections::HashMap, fmt, iter::FusedIterator, num::ParseIntError};
 
 use bevy::{
     asset::{io::Reader, Asset, AssetLoader, Handle, LoadContext},
-    color::Color,
+    color::{Color, Srgba},
     image::Image,
     math::{URect, UVec2},
     reflect::TypePath,
     sprite::{TextureAtlas, TextureAtlasLayout},
 };
-use serde::Deserialize;
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer,
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -26,6 +29,7 @@ enum BlendMode {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AsepriteLayer {
     name: String,
     opacity: u8,
@@ -40,6 +44,8 @@ pub struct AsepriteState {
     pub atlas: TextureAtlas,
     /// Duration of a frame (ms)
     pub durations: Vec<usize>,
+    pub first: usize,
+    pub last: usize,
 }
 
 impl AsepriteState {
@@ -62,15 +68,16 @@ impl AsepriteState {
         }
 
         let mut durations = Vec::with_capacity(tag.to - tag.from + 1);
+        // Potential optimization is one layout for all states in an image
         let mut atlas_layout = TextureAtlasLayout::new_empty(aseprite_json.meta.size.into());
         for frame in aseprite_json.frames.slice(tag.from, tag.to, tag.direction) {
             if frame.rotated {
                 return Err(AsepriteError::Unsupported("Frame Rotation".to_string()));
             }
-            if frame.trimmed || frame.source_size != frame.frame.into() {
+            if frame.trimmed || UVec2::from(frame.source_size) != frame.frame.size() {
                 return Err(AsepriteError::Unsupported("Sprite Trimming".to_string()));
             }
-            if frame.frame != frame.sprite_source_size {
+            if frame.frame.size() != frame.sprite_source_size.size() {
                 return Err(AsepriteError::Unsupported("Cel Trimming".to_string()));
             }
 
@@ -79,17 +86,22 @@ impl AsepriteState {
         }
         let layout_handle = load_context.add_labeled_asset(tag.name.clone(), atlas_layout);
 
+        let first = 0;
+        let last = durations.len() - 1;
+
         let atlas = TextureAtlas {
             layout: layout_handle,
-            index: 0,
+            index: first,
         };
 
         Ok(Self {
             name: tag.name.clone(),
             direction: tag.direction,
-            color: tag.color,
+            color: tag.color.into(),
             atlas,
             durations,
+            first,
+            last,
         })
     }
 }
@@ -175,6 +187,15 @@ struct AsepriteRect {
     h: u32,
 }
 
+impl AsepriteRect {
+    fn size(&self) -> UVec2 {
+        UVec2 {
+            x: self.w,
+            y: self.h,
+        }
+    }
+}
+
 impl From<AsepriteRect> for URect {
     fn from(v: AsepriteRect) -> Self {
         Self {
@@ -184,12 +205,6 @@ impl From<AsepriteRect> for URect {
                 y: v.y + v.h,
             },
         }
-    }
-}
-
-impl From<AsepriteRect> for AsepriteSize {
-    fn from(v: AsepriteRect) -> Self {
-        Self { w: v.w, h: v.h }
     }
 }
 
@@ -315,7 +330,7 @@ struct FrameTag {
     from: usize,
     to: usize,
     direction: AnimationDirection,
-    color: Color, // todo!() parse sRGB from '#<RR><GG><BB><AA>'
+    color: AsepriteColor, // todo!() parse sRGB from '#<RR><GG><BB><AA>'
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -335,7 +350,68 @@ struct AsepriteMeta {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AsepriteJson {
     frames: AsepriteFrames,
     meta: AsepriteMeta,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(try_from = "String")]
+struct AsepriteColor {
+    red: u8,
+    green: u8,
+    blue: u8,
+    alpha: u8,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Error)]
+pub enum ColorParseError {
+    #[error("Color string must begin with #")]
+    NoHashtag,
+    #[error("Color string must have length 7 or 9; was {0}")]
+    WrongLength(usize),
+    #[error("Invalid color value: {0}")]
+    ParseIntError(#[from] ParseIntError),
+}
+
+impl TryFrom<String> for AsepriteColor {
+    type Error = ColorParseError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        // let chars: Vec<_> = value.chars().collect();
+
+        if value.len() != 7 && value.len() != 9 {
+            return Err(ColorParseError::WrongLength(value.len()));
+        }
+
+        if &value[0..1] != "#" {
+            return Err(ColorParseError::NoHashtag);
+        }
+
+        let red = u8::from_str_radix(&value[1..3], 16)?;
+        let green = u8::from_str_radix(&value[3..5], 16)?;
+        let blue = u8::from_str_radix(&value[5..7], 16)?;
+        let alpha = value
+            .get(7..9)
+            .map_or_else(|| Ok(255), |v| u8::from_str_radix(v, 16))?;
+
+        Ok(AsepriteColor {
+            red,
+            green,
+            blue,
+            alpha,
+        })
+    }
+}
+
+impl From<AsepriteColor> for Color {
+    fn from(value: AsepriteColor) -> Self {
+        Self::Srgba(Srgba {
+            red: value.red as f32 / 255.0,
+            green: value.green as f32 / 255.0,
+            blue: value.blue as f32 / 255.0,
+            alpha: value.alpha as f32 / 255.0,
+        })
+    }
 }
