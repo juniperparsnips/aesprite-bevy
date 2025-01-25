@@ -1,4 +1,4 @@
-use aseprite_bevy::aseprite::{AsepriteAnimation, AsepriteLoader};
+use aseprite_bevy::{AsepriteAnimation, AsepritePlugin};
 use bevy::{asset::WaitForAssetError, prelude::*, window::WindowResolution};
 use dynastes::{AnimationStateMachine, Dynastes, DynastesPlugin};
 use thiserror::Error;
@@ -9,7 +9,7 @@ fn main() {
     res.set_scale_factor_override(Some(scale));
 
     App::new()
-        .add_plugins(
+        .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -19,10 +19,9 @@ fn main() {
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
-        )
-        .add_plugins(DynastesPlugin::<AsepriteAnimation>::default())
-        .init_asset::<AsepriteAnimation>()
-        .init_asset_loader::<AsepriteLoader>()
+            DynastesPlugin::<AsepriteAnimation>::default(),
+            AsepritePlugin,
+        ))
         .add_systems(Startup, setup)
         .run();
 }

@@ -1,5 +1,5 @@
 use core::str;
-use std::{collections::HashMap, fmt, iter::FusedIterator, num::ParseIntError};
+use std::{collections::HashMap, iter::FusedIterator, num::ParseIntError};
 
 use bevy::{
     asset::{io::Reader, Asset, AssetLoader, Handle, LoadContext},
@@ -10,10 +10,7 @@ use bevy::{
     sprite::{TextureAtlas, TextureAtlasLayout},
 };
 use dynastes::{State, StateSystem};
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer,
-};
+use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]

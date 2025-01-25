@@ -5,14 +5,12 @@ use std::{
     time::Duration,
 };
 
-use aseprite_bevy::aseprite::{AsepriteAnimation, AsepriteLoader};
+use aseprite_bevy::{AsepriteAnimation, AsepritePlugin};
 use bevy::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .init_asset::<AsepriteAnimation>()
-        .init_asset_loader::<AsepriteLoader>()
+        .add_plugins((DefaultPlugins, AsepritePlugin))
         .add_systems(Startup, setup)
         .add_systems(Update, animate_sprite)
         .add_systems(Update, render_on_load)
