@@ -3,6 +3,9 @@ mod aseprite;
 pub use aseprite::*;
 use bevy::{app::Plugin, asset::AssetApp};
 
+/// Re-export of dynastes
+pub use dynastes;
+
 #[derive(Default)]
 pub struct AsepritePlugin;
 

@@ -105,6 +105,10 @@ impl AsepriteState {
 }
 
 impl State for AsepriteState {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     fn first(&self) -> usize {
         self.first
     }
