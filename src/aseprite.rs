@@ -9,6 +9,7 @@ use bevy::{
     reflect::TypePath,
     sprite::{TextureAtlas, TextureAtlasLayout},
 };
+use dynastes::{State, StateSystem};
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
@@ -36,14 +37,14 @@ pub struct AsepriteLayer {
     blend_mode: BlendMode,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, TypePath)]
 pub struct AsepriteState {
     pub name: String,
     pub direction: AnimationDirection,
     pub color: Color,
     pub atlas: TextureAtlas,
     /// Duration of a frame (ms)
-    pub durations: Vec<usize>,
+    pub durations: Vec<u64>,
     pub first: usize,
     pub last: usize,
 }
@@ -106,6 +107,24 @@ impl AsepriteState {
     }
 }
 
+impl State for AsepriteState {
+    fn first(&self) -> usize {
+        self.first
+    }
+
+    fn last(&self) -> usize {
+        self.last
+    }
+
+    fn duration(&self, index: usize) -> Option<u64> {
+        self.durations.get(index - self.first).copied()
+    }
+
+    fn atlas(&self) -> &TextureAtlas {
+        &self.atlas
+    }
+}
+
 #[derive(Asset, TypePath, Debug)]
 pub struct AsepriteAnimation {
     pub image: Handle<Image>,
@@ -128,6 +147,18 @@ impl AsepriteAnimation {
         let image = load_context.load::<Image>(aseprite_json.meta.image);
 
         Ok(Self { image, states })
+    }
+}
+
+impl StateSystem for AsepriteAnimation {
+    type State = AsepriteState;
+
+    fn image(&self) -> &Handle<Image> {
+        &self.image
+    }
+
+    fn states(&self) -> &HashMap<String, Self::State> {
+        &self.states
     }
 }
 
@@ -231,7 +262,7 @@ pub struct AsepriteFrame {
     sprite_source_size: AsepriteRect,
     source_size: AsepriteSize,
     /// Duration the frame is shown (ms)
-    duration: usize,
+    duration: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -379,8 +410,6 @@ pub enum ColorParseError {
 impl TryFrom<String> for AsepriteColor {
     type Error = ColorParseError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        // let chars: Vec<_> = value.chars().collect();
-
         if value.len() != 7 && value.len() != 9 {
             return Err(ColorParseError::WrongLength(value.len()));
         }

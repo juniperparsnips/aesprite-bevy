@@ -1,0 +1,12 @@
+AnimationStateMachineSerde(
+    default_state_name: "RH-idle",
+    edges: {
+        "RH-idle": Some("RH-run"),
+        "RH-run": Some("RH-swing"),
+        "RH-swing": Some("RH-stick run"),
+        "RH-stick run": Some("RH-smash"),
+        "RH-smash": Some("RH-aim walk"),
+        "RH-aim walk": Some("RH-idle"),
+    },
+    states_path: "RH-Frontanim.json"
+)
